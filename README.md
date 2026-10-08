@@ -1,179 +1,82 @@
 # hebfix
 
-Fix text typed in the wrong keyboard layout, Hebrew or English, with one key press.
+You typed a whole sentence. Then you looked up. It says `akuo' nv eurv`.
+You meant `שלום, מה קורה`. Your keyboard was in English the whole time.
 
-hebfix is a [Hammerspoon](https://www.hammerspoon.org/) Spoon for macOS
-(`HebFix.spoon`). You meant to type Hebrew, but the English layout was active,
-so you typed `akuo`. Select it, tap Ctrl+Shift, and it becomes `שלום`.
-The reverse works too: `שלום` typed by mistake becomes `akuo`.
-To fix the whole field at once, press Ctrl+Shift+Space.
-
-## How it works
-
-1. You tap Ctrl+Shift (or press Ctrl+Shift+Space, which first sends Cmd+A to select
-   all text in the field).
-2. hebfix saves the full clipboard.
-3. It sends Cmd+C and waits for the clipboard to change (`copyTimeout`).
-   No change means no selection: it restores the clipboard and stops.
-4. It converts the text. The direction comes from the first Hebrew or English letter.
-5. It writes the result to the clipboard, marked as transient, and sends Cmd+V.
-6. It switches the input source to the target language (if `switchLayout` is on).
-7. After `restoreDelay` it restores your original clipboard.
+hebfix fixes it with one key press. It works both ways, Hebrew to English and back.
+macOS only.
 
 ## Install
 
-### With the script
+Paste this in Terminal:
 
 ```sh
-git clone https://github.com/danielmazh/hebfix.git && cd hebfix && ./scripts/install.sh
+git clone https://github.com/danielmazh/hebfix.git ~/hebfix && ~/hebfix/scripts/install.sh
 ```
 
-The script installs Hammerspoon with Homebrew if it is missing, copies the Spoon to
-`~/.hammerspoon/Spoons`, and adds a config block to `~/.hammerspoon/init.lua`.
-Running it again changes nothing.
+It installs [Hammerspoon](https://www.hammerspoon.org/) (with Homebrew) if you do not
+have it, then installs hebfix. Running it again is safe.
 
-To update an existing install, pull the new code and run `./scripts/install.sh` again.
-It replaces the Spoon and updates an older hebfix block in `init.lua` in place.
-Your other lines stay. Then reload the Hammerspoon config.
+Then do these 3 things once:
 
-### From the release zip
+1. Open Hammerspoon: `open -a Hammerspoon`
+2. Allow it in **System Settings > Privacy & Security > Accessibility**.
+   If macOS asks for **Input Monitoring** too, allow that as well.
+3. Restart it: `killall Hammerspoon; open -a Hammerspoon`
 
-1. Download `HebFix.spoon.zip` from
-   [GitHub Releases](https://github.com/danielmazh/hebfix/releases).
-2. Unzip it.
-3. Double-click `HebFix.spoon` (Hammerspoon installs it), or copy it to
-   `~/.hammerspoon/Spoons`.
-4. Add the config below to `~/.hammerspoon/init.lua` and reload Hammerspoon.
+## Use
 
-### Manual config
+| Keys | What happens |
+|---|---|
+| Select text, tap **Ctrl+Shift** | The selection is converted. |
+| **Ctrl+Shift+Space** | All text in the field is selected and converted. |
 
-```lua
-hs.loadSpoon("HebFix")
-spoon.HebFix:start()
+The keyboard also switches to the right language, so you can keep typing.
+Your clipboard comes back as it was.
+
+## Update
+
+```sh
+cd ~/hebfix && git pull && ./scripts/install.sh
 ```
-
-## Accessibility permission
-
-hebfix sends Cmd+A, Cmd+C and Cmd+V, and the Ctrl+Shift tap watches key and mouse
-events (it only checks the event type and modifiers, never which key or what text).
-So Hammerspoon needs Accessibility access.
-Open System Settings > Privacy & Security > Accessibility and enable Hammerspoon.
-Without it, nothing happens when you press the keys.
-
-## Usage
-
-| Keys | Action | What it does |
-|---|---|---|
-| Tap Ctrl+Shift | `convert` | Converts the selected text. |
-| Ctrl+Shift+Space | `convertAll` | Selects all text in the field (Cmd+A), then converts it. |
-
-To convert a selection:
-
-1. Select the text typed in the wrong layout.
-2. Press Ctrl and Shift, then release them.
-
-To convert the whole field, put the cursor in it and press Ctrl+Shift+Space.
-
-The text is replaced in place, and the keyboard switches to the right language.
-
-Tap rules:
-
-- The tap fires when you release the modifiers, not when you press them.
-- Any other key or any mouse click while the modifiers are down cancels the tap.
-  So Ctrl+Shift+Space, or Ctrl+Shift+click, does not also run the tap.
-- An extra modifier (Cmd, Option, or Fn) cancels the tap.
-- You may release Ctrl and Shift in any order.
-
-## Config
-
-Set fields after `hs.loadSpoon` and before `:start()`.
-
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `layouts` | table | `{ hebrew = "Hebrew", english = "ABC" }` | Input source names to switch to after conversion. |
-| `copyTimeout` | number (seconds) | `0.3` | How long to wait for Cmd+C to change the clipboard. |
-| `restoreDelay` | number (seconds) | `0.2` | Wait after Cmd+V before the old clipboard is restored. |
-| `switchLayout` | boolean | `true` | Switch the input source to the target language after paste. |
-
-Triggers are set with `:bindHotkeys(mapping)`. There are two actions:
-`convert` (the selection) and `convertAll` (select all, then convert).
-An entry with a key, like `{ { "cmd", "alt" }, "h" }`, is a normal hotkey.
-An entry with no key, like `{ { "ctrl", "shift" } }`, is a modifier tap.
-Leave an action out of the mapping to turn it off.
-
-Default:
-
-```lua
-spoon.HebFix:bindHotkeys({
-  convert = { { "ctrl", "shift" } },
-  convertAll = { { "ctrl", "shift" }, "space" },
-})
-```
-
-You can also call `spoon.HebFix:convert()` or `spoon.HebFix:convertAll()` from your
-own code.
-
-Example:
-
-```lua
-hs.loadSpoon("HebFix")
-spoon.HebFix.layouts = { hebrew = "Hebrew - PC", english = "U.S." }
-spoon.HebFix.copyTimeout = 0.5
-spoon.HebFix.restoreDelay = 0.3
-spoon.HebFix.switchLayout = false
-spoon.HebFix:bindHotkeys({
-  convert = { { "cmd", "alt" }, "h" },
-  convertAll = { { "alt", "shift" } },
-})
-spoon.HebFix:start()
-```
-
-## Privacy
-
-- Your clipboard is saved before each conversion and restored after it.
-- Converted text is marked with `org.nspasteboard.TransientType`, so clipboard
-  managers that respect it do not store it.
-- No selected or clipboard text is logged or written to disk.
-
-## Known limits
-
-- Mixed-language text: the whole selection is converted in the direction of the
-  first detected Hebrew or English letter.
-- Read-only fields: Cmd+V has no effect, so the conversion fails silently.
-- Layout names must match the names in `hs.keycodes.layouts()`. To check, open the
-  Hammerspoon console and run `hs.keycodes.layouts()`. If a name is not found, the
-  switch is skipped and one warning is logged.
-- Some apps block synthetic Cmd+C. In these apps nothing is copied, so nothing
-  is converted.
-- `convertAll` uses Cmd+A. In an app where Cmd+A selects more than the text field
-  (or nothing), the result follows what Cmd+A selected.
 
 ## Uninstall
 
 ```sh
-./scripts/uninstall.sh
+~/hebfix/scripts/uninstall.sh && rm -rf ~/hebfix
 ```
 
-It removes `~/.hammerspoon/Spoons/HebFix.spoon` and the block in
-`~/.hammerspoon/init.lua` between the lines `-- >>> hebfix >>>` and
-`-- <<< hebfix <<<`. The rest of your config and Hammerspoon itself stay.
+Hammerspoon and the rest of your `~/.hammerspoon/init.lua` stay.
+
+## Settings (optional)
+
+Edit `~/.hammerspoon/init.lua`. Put settings between `hs.loadSpoon("HebFix")` and
+`spoon.HebFix:start()`:
+
+```lua
+spoon.HebFix.layouts = { hebrew = "Hebrew", english = "ABC" } -- names from hs.keycodes.layouts()
+spoon.HebFix.copyTimeout = 0.3   -- seconds to wait for Cmd+C
+spoon.HebFix.restoreDelay = 0.2  -- seconds before the clipboard is restored
+spoon.HebFix.switchLayout = true -- switch the keyboard language after converting
+spoon.HebFix:bindHotkeys({
+  convert = { { "ctrl", "shift" } },             -- no key = tap the modifiers
+  convertAll = { { "ctrl", "shift" }, "space" },
+})
+```
+
+## Good to know
+
+- Mixed text is converted in one direction, set by the first letter.
+- Read-only fields: nothing happens.
+- Nothing you type or copy is logged or saved.
 
 ## Development
 
-Requirements: Lua 5.4, [busted](https://lunarmodules.github.io/busted/),
-[luacheck](https://github.com/lunarmodules/luacheck), and
-[stylua](https://github.com/JohnnyMorganz/StyLua).
-
 ```sh
-make lint        # luacheck
-make fmt-check   # stylua --check
-make test        # busted
-make test-scripts # shellcheck + install/uninstall tests (temp HOME)
-make package     # builds dist/HebFix.spoon.zip
+make lint fmt-check test test-scripts package
 ```
 
-CI runs lint, fmt-check, test, test-scripts, and package on every push to `dev` and `main`
-and on pull requests.
+Needs Lua 5.4, busted, luacheck, stylua and shellcheck.
 
 ## License
 
