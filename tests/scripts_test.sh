@@ -150,6 +150,18 @@ run_uninstall "$h"
 check "no-newline: uninstall leaves only the user line" \
   test "$(cat "$h/.hammerspoon/init.lua")" = 'hs.alert.show("no newline")'
 
+# 8b. init.lua is a symlink (dotfiles setup): uninstall keeps the link.
+h="$(new_home)"
+mkdir -p "$h/.hammerspoon" "$h/dotfiles"
+printf '%s\n' 'hs.alert.show("dotfiles")' >"$h/dotfiles/init.lua"
+ln -s "$h/dotfiles/init.lua" "$h/.hammerspoon/init.lua"
+run_install "$h"
+check "symlink: block added to the link target" has_block "$h"
+run_uninstall "$h"
+check "symlink: init.lua is still a symlink" test -L "$h/.hammerspoon/init.lua"
+check "symlink: target keeps only the user line" \
+  test "$(cat "$h/dotfiles/init.lua")" = 'hs.alert.show("dotfiles")'
+
 # 9. make package.
 pkg_out="$work/package.log"
 if (cd "$repo" && make package >"$pkg_out" 2>&1); then

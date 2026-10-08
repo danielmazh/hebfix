@@ -124,10 +124,12 @@ Requirements: Lua 5.4, [busted](https://lunarmodules.github.io/busted/),
 make lint        # luacheck
 make fmt-check   # stylua --check
 make test        # busted
+make test-scripts # shellcheck + install/uninstall tests (temp HOME)
 make package     # builds dist/HebFix.spoon.zip
 ```
 
-CI runs lint, fmt-check, and test on every push to `dev` and `main` and on pull requests.
+CI runs lint, fmt-check, test, test-scripts, and package on every push to `dev` and `main`
+and on pull requests.
 
 ## License
 
