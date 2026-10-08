@@ -7,7 +7,7 @@
 4. Wait with `hs.pasteboard.callbackWhenChanged` (timeout `copyTimeout`, default 0.3 s).
    No change means no selection: restore and stop.
 5. `converter.convert(text)`.
-6. Write the result with `setContents` plus an `org.nspasteboard.TransientType` entry.
+6. Write the result in one `writeAllData` call: text plus an `org.nspasteboard.TransientType` entry.
 7. Send Cmd+V.
 8. Switch the input source to the target language (if `switchLayout`).
 9. After `restoreDelay` (default 0.2 s) restore the saved pasteboard (`writeAllData`).
@@ -16,7 +16,7 @@
 | Module | Role | hs.* use |
 |---|---|---|
 | `converter.lua` | pure text mapping | none |
-| `clipboard.lua` | save, restore, copy, paste | `hs.pasteboard`, `hs.eventtap`, `hs.timer` |
+| `clipboard.lua` | save, restore, copy, transient write, paste | `hs.pasteboard`, `hs.eventtap`, `hs.timer` |
 | `layout.lua` | input source switch | `hs.keycodes`, `hs.logger` |
 | `init.lua` | Spoon object, hotkey, orchestration | `hs.hotkey`, `hs.spoons`, `hs.timer`, `hs.logger` |
 
