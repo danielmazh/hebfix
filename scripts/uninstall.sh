@@ -30,7 +30,8 @@ if [ -f "$init_file" ] && grep -qxF -- "$MARK_BEGIN" "$init_file"; then
     !skip { print }
   ' "$init_file" >"$tmp"
   # Keep the original file mode.
-  chmod "$(stat -f '%Lp' "$init_file" 2>/dev/null || stat -c '%a' "$init_file")" "$tmp"
+  # GNU stat first: on Linux, 'stat -f' succeeds but prints file system info.
+  chmod "$(stat -c '%a' "$init_file" 2>/dev/null || stat -f '%Lp' "$init_file")" "$tmp"
   mv "$tmp" "$init_file"
   trap - EXIT
   echo "Removed config block from: $init_file"
