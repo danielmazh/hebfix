@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  STYLUA_VERSION: "2.5.2"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.4
+        uses: leafo/gh-actions-lua@v13
+        with:
+          luaVersion: "5.4"
+
+      - name: Install LuaRocks
+        uses: leafo/gh-actions-luarocks@v6
+
+      - name: Install busted and luacheck
+        run: |
+          luarocks install busted
+          luarocks install luacheck
+
+      - name: Install StyLua
+        run: |
+          curl -fsSL -o /tmp/stylua.zip \
+            "https://github.com/JohnnyMorganz/StyLua/releases/download/v${STYLUA_VERSION}/stylua-linux-x86_64.zip"
+          mkdir -p "$HOME/.local/bin"
+          unzip -o /tmp/stylua.zip -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/stylua"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install shellcheck and zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck zip
+
+      - name: Tool versions
+        run: |
+          lua -v
+          luarocks --version
+          busted --version
+          luacheck --version
+          stylua --version
+          shellcheck --version
+
+      - name: Lint
+        run: make lint
+
+      - name: Format check
+        run: make fmt-check
+
+      - name: Test
+        run: make test
+
+      - name: Test scripts
+        run: make test-scripts
+
+      - name: Package
+        run: make package
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: HebFix.spoon.zip
+          path: dist/HebFix.spoon.zip
+          if-no-files-found: ignore
