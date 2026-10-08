@@ -1,4 +1,4 @@
---- Clipboard helpers: save, restore, copy, paste.
+--- Clipboard helpers: save, restore, select all, copy, paste.
 -- Uses the global `hs`, read at call time. Never logs or stores clipboard content.
 local M = {}
 
@@ -35,6 +35,11 @@ end
 --- Write text with a transient marker so clipboard managers skip it.
 function M.writeTransient(text)
   return hs.pasteboard.writeAllData({ [TEXT_UTI] = text, [TRANSIENT_UTI] = "" })
+end
+
+--- Send Cmd+A (select all in the focused field).
+function M.selectAll()
+  hs.eventtap.keyStroke({ "cmd" }, "a", 0)
 end
 
 --- Send Cmd+V.
