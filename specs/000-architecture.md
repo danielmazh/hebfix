@@ -19,6 +19,7 @@
 | `clipboard.lua` | save, restore, copy, transient write, paste | `hs.pasteboard`, `hs.eventtap` |
 | `layout.lua` | input source switch | `hs.keycodes`, `hs.logger` |
 | `init.lua` | Spoon object, hotkey, orchestration | `hs.hotkey`, `hs.spoons`, `hs.timer`, `hs.logger` |
+| `modtap.lua` | modifier-only tap trigger (SPEC-008) | `hs.eventtap`, `hs.timer` |
 
 ## Privacy
 No clipboard or selected text is logged or written to disk.
