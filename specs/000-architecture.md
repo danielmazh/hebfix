@@ -16,7 +16,7 @@
 | Module | Role | hs.* use |
 |---|---|---|
 | `converter.lua` | pure text mapping | none |
-| `clipboard.lua` | save, restore, copy, transient write, paste | `hs.pasteboard`, `hs.eventtap`, `hs.timer` |
+| `clipboard.lua` | save, restore, copy, transient write, paste | `hs.pasteboard`, `hs.eventtap` |
 | `layout.lua` | input source switch | `hs.keycodes`, `hs.logger` |
 | `init.lua` | Spoon object, hotkey, orchestration | `hs.hotkey`, `hs.spoons`, `hs.timer`, `hs.logger` |
 

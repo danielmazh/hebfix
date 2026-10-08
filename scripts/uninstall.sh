@@ -29,10 +29,9 @@ if [ -f "$init_file" ] && grep -qxF -- "$MARK_BEGIN" "$init_file"; then
     skip && $0 == e { skip = 0; next }
     !skip { print }
   ' "$init_file" >"$tmp"
-  # Keep the original file mode.
-  # GNU stat first: on Linux, 'stat -f' succeeds but prints file system info.
-  chmod "$(stat -c '%a' "$init_file" 2>/dev/null || stat -f '%Lp' "$init_file")" "$tmp"
-  mv "$tmp" "$init_file"
+  # Write through the file, not mv over it: keeps the file mode and a dotfiles symlink.
+  cat "$tmp" >"$init_file"
+  rm -f "$tmp"
   trap - EXIT
   echo "Removed config block from: $init_file"
 else
