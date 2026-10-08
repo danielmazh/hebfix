@@ -1,0 +1,8 @@
+return {
+  default = {
+    ROOT = { "tests" },
+    pattern = "_spec",
+    lpath = "HebFix.spoon/?.lua;tests/?.lua",
+    verbose = true,
+  },
+}
