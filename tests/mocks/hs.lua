@@ -36,6 +36,13 @@ Hotkey: bind(mods, key, [msg,] pressedfn, releasedfn, repeatfn) and new(...) ret
   with enable, disable, delete and a test helper _press(). All are listed in hs._hotkeys.
   bind() returns an enabled hotkey; new() a disabled one.
 Spoons: hs.spoons.resourcePath(file) -> "HebFix.spoon/" .. file.
+Eventtap: hs.eventtap.event.types has flagsChanged, keyDown, keyUp, leftMouseDown,
+  rightMouseDown, otherMouseDown (numbers). hs.eventtap.new(types, fn) records "eventtap.new"
+  and returns a stopped tap with start ("eventtap.start"), stop ("eventtap.stop") and
+  isEnabled. All taps are listed in hs._taps.
+  hs._emit(typeName, flags) builds an event (getType, getFlags) and calls fn of every started
+  tap that watches that type. flags is a table like {ctrl=true, shift=true} (default {}).
+  Returns a list of the consume values the taps returned.
 ]]
 
 local M = {}
@@ -58,7 +65,7 @@ local function combo(mods, key)
 end
 
 function M.new()
-  local hs = { _calls = {}, _logs = {}, _timers = {}, _hotkeys = {} }
+  local hs = { _calls = {}, _logs = {}, _timers = {}, _hotkeys = {}, _taps = {} }
   hs._pb = { contents = {}, changeCount = 0 }
   hs._layouts = { "ABC", "Hebrew" }
   hs._currentLayout = "ABC"
@@ -138,6 +145,60 @@ function M.new()
     if key == "c" then
       pendingCopy = true
     end
+  end
+
+  hs.eventtap.event = {
+    types = {
+      leftMouseDown = 1,
+      rightMouseDown = 3,
+      keyDown = 10,
+      keyUp = 11,
+      flagsChanged = 12,
+      otherMouseDown = 25,
+    },
+  }
+  function hs.eventtap.new(types, fn)
+    rec("eventtap.new")
+    local tap = { types = copy(types), fn = fn, enabled = false }
+    function tap:start()
+      rec("eventtap.start")
+      self.enabled = true
+      return self
+    end
+    function tap:stop()
+      rec("eventtap.stop")
+      self.enabled = false
+      return self
+    end
+    function tap:isEnabled()
+      return self.enabled
+    end
+    hs._taps[#hs._taps + 1] = tap
+    return tap
+  end
+  function hs._emit(typeName, flags)
+    local t = hs.eventtap.event.types[typeName]
+    assert(t ~= nil, "unknown event type: " .. tostring(typeName))
+    local f = copy(flags)
+    local event = {}
+    function event.getType(_)
+      return t
+    end
+    function event.getFlags(_)
+      return copy(f)
+    end
+    local results = {}
+    for _, tap in ipairs(hs._taps) do
+      if tap.enabled then
+        for _, wanted in ipairs(tap.types) do
+          if wanted == t then
+            results[#results + 1] = tap.fn(event)
+            break
+          end
+        end
+      end
+    end
+    return results
   end
 
   hs.timer = {}

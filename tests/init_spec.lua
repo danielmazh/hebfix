@@ -41,7 +41,7 @@ describe("HebFix spoon", function()
   describe("metadata and defaults", function()
     it("has the Spoon metadata", function()
       assert.equal("HebFix", spoon.name)
-      assert.equal("1.0.0", spoon.version)
+      assert.equal("1.1.0", spoon.version)
       assert.equal("Daniel Mazhbits", spoon.author)
       assert.equal("MIT - https://opensource.org/licenses/MIT", spoon.license)
       assert.equal("https://github.com/danielmazh/hebfix", spoon.homepage)
@@ -53,7 +53,10 @@ describe("HebFix spoon", function()
       assert.equal(0.3, spoon.copyTimeout)
       assert.equal(0.2, spoon.restoreDelay)
       assert.is_true(spoon.switchLayout)
-      assert.same({ convert = { { "ctrl", "shift" }, "space" } }, spoon.defaultHotkeys)
+      assert.same({
+        convert = { { "ctrl", "shift" } },
+        convertAll = { { "ctrl", "shift" }, "space" },
+      }, spoon.defaultHotkeys)
     end)
 
     it("init returns self and loads the modules", function()
@@ -61,6 +64,7 @@ describe("HebFix spoon", function()
       assert.is_table(spoon.converter)
       assert.is_table(spoon.clipboard)
       assert.is_table(spoon.layout)
+      assert.is_table(spoon.modtap)
       assert.is_table(spoon.logger)
     end)
   end)
@@ -211,19 +215,174 @@ describe("HebFix spoon", function()
     end)
   end)
 
+  describe("convertAll", function()
+    it("sends cmd+a first, then runs the full flow in order", function()
+      hs._nextCopy = "akuo"
+      assert.equal(spoon, spoon:convertAll())
+      assert.same({
+        "eventtap.keyStroke cmd+a",
+        "pasteboard.readAllData",
+        "eventtap.keyStroke cmd+c",
+        "pasteboard.callbackWhenChanged",
+        "pasteboard.readString",
+        "pasteboard.writeAllData",
+        "eventtap.keyStroke cmd+v",
+        "keycodes.setLayout Hebrew",
+        "timer.doAfter 0.2",
+      }, hs._calls)
+      assert.same({ [TEXT] = "שלום", [TRANSIENT] = "" }, writes[1])
+      hs._runTimers()
+      assert.same({ [TEXT] = "original", ["public.png"] = "\0png" }, hs._pb.contents)
+    end)
+
+    it("convert does not send cmd+a", function()
+      hs._nextCopy = "akuo"
+      spoon:convert()
+      assert.equal(0, count("eventtap.keyStroke cmd+a"))
+    end)
+
+    it("empty field restores and does not paste", function()
+      hs._nextCopy = nil
+      spoon:convertAll()
+      assert.equal(0, count("eventtap.keyStroke cmd+v"))
+      assert.equal(1, #writes)
+      assert.same({ [TEXT] = "original", ["public.png"] = "\0png" }, hs._pb.contents)
+    end)
+
+    it("restores the clipboard and logs no text when the flow errors", function()
+      spoon.converter = {
+        convert = function()
+          error("boom")
+        end,
+      }
+      hs._nextCopy = "secret-text"
+      spoon:convertAll()
+      assert.equal(0, count("eventtap.keyStroke cmd+v"))
+      assert.same({ [TEXT] = "original", ["public.png"] = "\0png" }, hs._pb.contents)
+      assert.equal(1, #hs._logs)
+      assert.is_nil(hs._logs[1].msg:find("secret", 1, true))
+    end)
+
+    it("the busy guard covers convert and convertAll", function()
+      hs._nextCopy = "akuo"
+      spoon:convert()
+      local before = #hs._calls
+      spoon:convertAll()
+      spoon:convert()
+      assert.equal(before, #hs._calls)
+
+      hs._runTimers()
+      hs._nextCopy = "akuo"
+      spoon:convertAll()
+      before = #hs._calls
+      spoon:convert()
+      spoon:convertAll()
+      assert.equal(before, #hs._calls)
+      assert.equal(1, count("eventtap.keyStroke cmd+a"))
+
+      hs._runTimers()
+      hs._nextCopy = "akuo"
+      spoon:convert()
+      assert.equal(3, hs._count("pasteboard.readAllData"))
+    end)
+  end)
+
   describe("hotkeys", function()
-    it("start binds the default ctrl+shift+space hotkey and enables it", function()
+    -- Press and release ctrl+shift, then run the timers.
+    local function tapCtrlShift()
+      hs._emit("flagsChanged", { ctrl = true })
+      hs._emit("flagsChanged", { ctrl = true, shift = true })
+      hs._emit("flagsChanged", {})
+      hs._runTimers()
+    end
+
+    it("start binds one tap and one hotkey by default and enables both", function()
       assert.equal(spoon, spoon:start())
+      assert.equal(1, hs._count("eventtap.new"))
+      assert.equal(1, #hs._taps)
+      assert.is_true(hs._taps[1]:isEnabled())
       assert.is_true(hs._called("hotkey.new ctrl+shift+space"))
       assert.equal(1, #hs._hotkeys)
       assert.is_true(hs._hotkeys[1].enabled)
     end)
 
-    it("the hotkey runs convert", function()
+    it("the ctrl+shift tap runs convert", function()
+      spoon:start()
+      hs._nextCopy = "akuo"
+      tapCtrlShift()
+      assert.same({ [TEXT] = "שלום", [TRANSIENT] = "" }, writes[1])
+      assert.equal(0, count("eventtap.keyStroke cmd+a"))
+      assert.equal(1, hs._count("eventtap.keyStroke cmd+c"))
+    end)
+
+    it("the ctrl+shift+space hotkey runs convertAll", function()
       spoon:start()
       hs._nextCopy = "akuo"
       hs._hotkeys[1]:_press()
+      assert.equal("eventtap.keyStroke cmd+a", hs._calls[#hs._calls - 8])
       assert.same({ [TEXT] = "שלום", [TRANSIENT] = "" }, writes[1])
+    end)
+
+    it("a hotkey press cancels a pending tap", function()
+      spoon:start()
+      hs._nextCopy = "akuo"
+      hs._emit("flagsChanged", { ctrl = true, shift = true })
+      hs._hotkeys[1]:_press()
+      hs._emit("flagsChanged", {})
+      hs._runTimers()
+      assert.equal(1, hs._count("eventtap.keyStroke cmd+c"))
+      assert.equal(1, hs._count("eventtap.keyStroke cmd+a"))
+    end)
+
+    it("a key-less entry binds a modifier tap, not a hotkey", function()
+      spoon:bindHotkeys({ convert = { { "cmd", "alt" } } })
+      assert.equal(0, #hs._hotkeys)
+      assert.equal(0, #hs._taps) -- the event tap is created on start
+      spoon:start()
+      assert.equal(0, #hs._hotkeys)
+      assert.equal(1, #hs._taps)
+      assert.is_true(hs._taps[1]:isEnabled())
+      hs._nextCopy = "akuo"
+      hs._emit("flagsChanged", { cmd = true, alt = true })
+      hs._emit("flagsChanged", {})
+      hs._runTimers()
+      assert.same({ [TEXT] = "שלום", [TRANSIENT] = "" }, writes[1])
+    end)
+
+    it("convertAll can be a tap and convert a hotkey", function()
+      spoon:bindHotkeys({
+        convert = { { "cmd", "alt" }, "h" },
+        convertAll = { { "ctrl", "shift" } },
+      })
+      spoon:start()
+      hs._nextCopy = "akuo"
+      tapCtrlShift()
+      assert.equal(1, hs._count("eventtap.keyStroke cmd+a"))
+      assert.is_true(hs._called("hotkey.new cmd+alt+h"))
+    end)
+
+    it("stop stops the tap and start starts it again", function()
+      spoon:start()
+      spoon:stop()
+      assert.is_true(hs._called("eventtap.stop"))
+      assert.is_false(hs._taps[1]:isEnabled())
+      hs._nextCopy = "akuo"
+      tapCtrlShift()
+      assert.equal(0, count("eventtap.keyStroke"))
+      spoon:start()
+      assert.equal(1, #hs._taps)
+      tapCtrlShift()
+      assert.equal(1, hs._count("eventtap.keyStroke cmd+c"))
+    end)
+
+    it("rebinding stops the old tap", function()
+      spoon:start()
+      spoon:bindHotkeys({ convert = { { "cmd", "alt" }, "h" } })
+      assert.is_false(hs._taps[1]:isEnabled())
+      assert.equal(1, #hs._taps)
+      hs._nextCopy = "akuo"
+      tapCtrlShift()
+      assert.equal(0, count("eventtap.keyStroke"))
     end)
 
     it("bindHotkeys uses the given mapping and start keeps it", function()
@@ -232,6 +391,7 @@ describe("HebFix spoon", function()
       assert.is_false(hs._hotkeys[1].enabled)
       spoon:start()
       assert.is_false(hs._called("hotkey.new ctrl+shift+space"))
+      assert.equal(0, #hs._taps)
       assert.equal(1, #hs._hotkeys)
       assert.is_true(hs._hotkeys[1].enabled)
     end)
@@ -251,6 +411,7 @@ describe("HebFix spoon", function()
       spoon:start()
       assert.is_true(hs._hotkeys[1].enabled)
       assert.equal(1, #hs._hotkeys)
+      assert.equal(1, #hs._taps)
     end)
 
     it("stop before start is safe", function()
