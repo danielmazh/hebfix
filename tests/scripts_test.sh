@@ -55,13 +55,26 @@ spoon_matches_source() {
   diff -r -x .DS_Store "$repo/HebFix.spoon" "$1/.hammerspoon/Spoons/HebFix.spoon" >/dev/null
 }
 
+# The current block, exactly: markers plus a two-line body.
+expected_block() {
+  printf '%s\n' "-- >>> hebfix >>>" 'hs.loadSpoon("HebFix")' 'spoon.HebFix:start()' "-- <<< hebfix <<<"
+}
+
+# The marked block (markers included) as found in init.lua.
+current_block() {
+  awk '$0 == "-- >>> hebfix >>>" { on = 1 } on { print } $0 == "-- <<< hebfix <<<" { on = 0 }' \
+    "$1/.hammerspoon/init.lua"
+}
+
 has_block() {
-  local f="$1/.hammerspoon/init.lua"
-  grep -qxF -- "-- >>> hebfix >>>" "$f" &&
-    grep -qxF -- 'hs.loadSpoon("HebFix")' "$f" &&
-    grep -qxF -- 'spoon.HebFix:bindHotkeys({ convert = { { "ctrl", "shift" }, "space" } })' "$f" &&
-    grep -qxF -- 'spoon.HebFix:start()' "$f" &&
-    grep -qxF -- "-- <<< hebfix <<<" "$f"
+  test "$(current_block "$1")" = "$(expected_block)"
+}
+
+# The v1.0.0 block, with the old bindHotkeys line.
+old_block() {
+  printf '%s\n' "-- >>> hebfix >>>" 'hs.loadSpoon("HebFix")' \
+    'spoon.HebFix:bindHotkeys({ convert = { { "ctrl", "shift" }, "space" } })' \
+    'spoon.HebFix:start()' "-- <<< hebfix <<<"
 }
 
 # 1. Fresh install creates the Spoon and the block.
@@ -70,6 +83,8 @@ run_install "$h"
 check "fresh install copies the Spoon" spoon_matches_source "$h"
 check "fresh install creates init.lua with the block" has_block "$h"
 check "fresh install adds the block once" test "$(block_count "$h")" = 1
+check "fresh install has no bindHotkeys line" \
+  test -z "$(grep -F 'bindHotkeys' "$h/.hammerspoon/init.lua" || true)"
 
 # 2. Second install changes nothing.
 before="$(tree_sum "$h")"
@@ -161,6 +176,66 @@ run_uninstall "$h"
 check "symlink: init.lua is still a symlink" test -L "$h/.hammerspoon/init.lua"
 check "symlink: target keeps only the user line" \
   test "$(cat "$h/dotfiles/init.lua")" = 'hs.alert.show("dotfiles")'
+
+# 8c. Upgrade: a v1.0.0 block is replaced in place, user lines around it stay.
+h="$(new_home)"
+mkdir -p "$h/.hammerspoon"
+{
+  printf '%s\n' '-- top' 'local a = 1'
+  old_block
+  printf '%s\n' 'local b = 2' '-- bottom'
+} >"$h/.hammerspoon/init.lua"
+out="$(HOME="$h" bash "$install")"
+check "upgrade: prints the update message" \
+  grep -qxF -- "Updated config block in: $h/.hammerspoon/init.lua" <<<"$out"
+check "upgrade: old bindHotkeys line is gone" \
+  test -z "$(grep -F 'bindHotkeys' "$h/.hammerspoon/init.lua" || true)"
+check "upgrade: block is the current block" has_block "$h"
+check "upgrade: block appears once" test "$(block_count "$h")" = 1
+check "upgrade: user lines around the block stay" \
+  test "$(cat "$h/.hammerspoon/init.lua")" = "$(
+    printf '%s\n' '-- top' 'local a = 1'
+    expected_block
+    printf '%s\n' 'local b = 2' '-- bottom'
+  )"
+before="$(tree_sum "$h")"
+out="$(HOME="$h" bash "$install")"
+after="$(tree_sum "$h")"
+check "upgrade: second run changes nothing" test "$before" = "$after"
+check "upgrade: second run says the block is present" \
+  grep -qxF -- "Config block already present: $h/.hammerspoon/init.lua" <<<"$out"
+run_uninstall "$h"
+check "upgrade: uninstall leaves only the user lines" \
+  test "$(cat "$h/.hammerspoon/init.lua")" = "$(printf '%s\n' '-- top' 'local a = 1' 'local b = 2' '-- bottom')"
+
+# 8d. Upgrade through a symlinked init.lua keeps the link and its mode.
+h="$(new_home)"
+mkdir -p "$h/.hammerspoon" "$h/dotfiles"
+{
+  printf '%s\n' 'hs.alert.show("dotfiles")'
+  old_block
+} >"$h/dotfiles/init.lua"
+chmod 600 "$h/dotfiles/init.lua"
+ln -s "$h/dotfiles/init.lua" "$h/.hammerspoon/init.lua"
+run_install "$h"
+check "upgrade symlink: init.lua is still a symlink" test -L "$h/.hammerspoon/init.lua"
+check "upgrade symlink: target has the current block" has_block "$h"
+check "upgrade symlink: target keeps its mode" \
+  test "$(find "$h/dotfiles/init.lua" -perm 600 | wc -l | tr -d ' ')" = 1
+check "upgrade symlink: user line stays first" \
+  test "$(head -n 1 "$h/dotfiles/init.lua")" = 'hs.alert.show("dotfiles")'
+
+# 8e. A begin marker with no end marker: install stops and edits nothing.
+h="$(new_home)"
+mkdir -p "$h/.hammerspoon"
+printf '%s\n' 'x = 1' '-- >>> hebfix >>>' 'hs.loadSpoon("HebFix")' >"$h/.hammerspoon/init.lua"
+cp "$h/.hammerspoon/init.lua" "$work/broken_init.lua"
+if HOME="$h" bash "$install" >/dev/null 2>&1; then
+  fail "broken block: install exits non-zero"
+else
+  pass "broken block: install exits non-zero"
+fi
+check "broken block: init.lua unchanged" cmp -s "$work/broken_init.lua" "$h/.hammerspoon/init.lua"
 
 # 9. make package.
 pkg_out="$work/package.log"

@@ -102,6 +102,11 @@ describe("clipboard", function()
     assert.equal(1, hs._count("pasteboard.writeAllData"))
   end)
 
+  it("selectAll sends cmd+a", function()
+    clipboard.selectAll()
+    assert.same({ "eventtap.keyStroke cmd+a" }, hs._calls)
+  end)
+
   it("paste sends cmd+v", function()
     clipboard.paste()
     assert.same({ "eventtap.keyStroke cmd+v" }, hs._calls)
