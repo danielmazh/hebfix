@@ -3,11 +3,12 @@
 local M = {}
 
 -- Forward table: US key char (lowercase) -> character the macOS "Hebrew" layout types.
--- Square brackets are mirrored on macOS Hebrew, so "[" types "]" and "]" types "[".
+-- Bracket pairs are mirrored on macOS Hebrew, so "[" types "]", "(" types ")" and so on.
+-- Verified against com.apple.keylayout.Hebrew with UCKeyTranslate.
 -- Keys not listed here type the same character on both layouts and pass through.
 M.toHebrew = {
   q = "/",
-  w = "'",
+  w = "׳", -- geresh
   e = "ק",
   r = "ר",
   t = "א",
@@ -39,6 +40,15 @@ M.toHebrew = {
   ["/"] = ".",
   ["["] = "]",
   ["]"] = "[",
+  ["`"] = ";",
+  ["("] = ")",
+  [")"] = "(",
+  ["<"] = ">",
+  [">"] = "<",
+  ["{"] = "}",
+  ["}"] = "{",
+  ['"'] = "״", -- gershayim
+  ["&"] = "₪", -- new shekel sign
 }
 
 -- Reverse table: built from the forward table. Errors at load time on a collision.

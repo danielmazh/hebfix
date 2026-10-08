@@ -11,9 +11,10 @@ local function keys()
   return list
 end
 
--- A key that types a Hebrew letter, so the converted text still has a direction.
+-- A key that types a Hebrew letter (U+05D0..U+05EA), so the converted text still has a direction.
 local function isLetterKey(k)
-  return k:match("^%a$") ~= nil and converter.toHebrew[k]:match("^[%z\1-\127]$") == nil
+  local cp = utf8.codepoint(converter.toHebrew[k])
+  return k:match("^%a$") ~= nil and cp >= 0x05D0 and cp <= 0x05EA
 end
 
 describe("converter", function()
@@ -112,11 +113,22 @@ describe("converter", function()
 
   describe("punctuation", function()
     it("converts punctuation keys once direction is known (to Hebrew)", function()
-      assert.are.equal("ש,.ץתף][/'", (convert("a'/.,;[]qw")))
+      assert.are.equal("ש,.ץתף][/׳", (convert("a'/.,;[]qw")))
     end)
 
     it("converts punctuation back (to English)", function()
-      assert.are.equal("a'/.,;[]qw", (convert("ש,.ץתף][/'")))
+      assert.are.equal("a'/.,;[]qw", (convert("ש,.ץתף][/׳")))
+    end)
+
+    it("maps the mirrored and shifted keys of the macOS layout", function()
+      assert.are.equal("ש;)(><}{״₪", (convert('a`()<>{}"&')))
+      assert.are.equal('a`()<>{}"&', (convert("ש;)(><}{״₪")))
+    end)
+
+    it("does not take direction from geresh or gershayim", function()
+      local out, dir = convert("׳״")
+      assert.are.equal("׳״", out)
+      assert.is_nil(dir)
     end)
 
     it("decides direction from the first letter even after punctuation", function()
